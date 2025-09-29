@@ -108,27 +108,27 @@ class TradeFinanceGame {
             cottonFabric: { 
                 name: 'Cotton Fabric', 
                 materials: { cotton: 2 }, 
-                price: 12.50, 
+                price: 11.25, 
                 unit: 'yards',
-                baseMargin: 2.00, // $2.00 per unit base margin
+                baseMargin: 1.70, // $1.70 per unit base margin (reduced by 15%)
                 manufacturingDays: 2, // 2 days to manufacture
                 manufacturingCost: 1.50 // $1.50 per unit manufacturing cost
             },
             woolFabric: { 
                 name: 'Wool Fabric', 
                 materials: { wool: 2.0 }, 
-                price: 22.50, 
+                price: 20.25, 
                 unit: 'yards',
-                baseMargin: 4.00, // $4.00 per unit base margin
+                baseMargin: 3.40, // $3.40 per unit base margin (reduced by 15%)
                 manufacturingDays: 3, // 3 days to manufacture
                 manufacturingCost: 2.50 // $2.50 per unit manufacturing cost
             },
             syntheticFabric: { 
                 name: 'Synthetic Fabric', 
                 materials: { wool: 2.0, silk: 1.0 }, 
-                price: 40.00, 
+                price: 36.00, 
                 unit: 'yards',
-                baseMargin: 8.00, // $8.00 per unit base margin
+                baseMargin: 6.80, // $6.80 per unit base margin (reduced by 15%)
                 manufacturingDays: 5, // 5 days to manufacture
                 manufacturingCost: 8.00 // $8.00 per unit manufacturing cost
             }
@@ -401,7 +401,7 @@ class TradeFinanceGame {
                 <p>Quantity: ${this.formatNumber(order.quantity)} ${this.products[order.product].unit}</p>
                 <p>Buyer: ${this.buyers[order.buyer].name} (${this.buyers[order.buyer].location})</p>
                 <p>Base Price: $${order.basePrice.toFixed(2)}/${this.products[order.product].unit}</p>
-                <p>Margin: $${order.marginPerUnit.toFixed(2)}/${this.products[order.product].unit}</p>
+                <p>Unit Price: $${order.unitPrice.toFixed(2)}/${this.products[order.product].unit}</p>
                 <p>Revenue: $${order.revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                 <p>Status: ${status}</p>
                 <p>Payment Terms: ${order.paymentTerms} days</p>
@@ -619,26 +619,22 @@ class TradeFinanceGame {
             const option = document.createElement('option');
             option.value = key;
             
-            // Calculate margin based on product and credit terms
-            let marginPerUnit = productData.baseMargin;
+            // Calculate price based on manufacturing price and credit terms
+            let pricePerUnit = productData.price; // Exact manufacturing price for 30-day terms
             
-            // Apply credit term adjustments
+            // Credit term adjustments: 30 days = exact manufacturing price
             if (buyer.paymentTerms === 0) {
-                marginPerUnit = 0; // No margin for cash terms - price below base
+                pricePerUnit *= 0.80; // 20% discount for cash payment (zero risk)
             } else if (buyer.paymentTerms <= 15) {
-                marginPerUnit *= 0.8; // 20% discount
+                pricePerUnit *= 0.90; // 10% discount for very short terms
             } else if (buyer.paymentTerms <= 30) {
-                marginPerUnit *= 0.9; // 10% discount
+                pricePerUnit *= 1.0; // Exact manufacturing price for 30-day terms
             } else if (buyer.paymentTerms <= 45) {
-                marginPerUnit *= 1.0; // Base margin
+                pricePerUnit *= 1.05; // 5% premium for longer terms
             } else if (buyer.paymentTerms <= 60) {
-                marginPerUnit *= 1.1; // 10% premium
-            }
-            
-            // Calculate total price per unit (base price + margin)
-            let pricePerUnit = productData.price + marginPerUnit;
-            if (buyer.paymentTerms === 0) {
-                pricePerUnit = productData.price * 0.8; // 20% discount for cash terms
+                pricePerUnit *= 1.10; // 10% premium for extended terms
+            } else {
+                pricePerUnit *= 1.15; // 15% premium for very long terms
             }
             const paymentText = buyer.paymentTerms === 0 ? 'Cash' : `${buyer.paymentTerms} days`;
             option.textContent = `${buyer.name} (${buyer.location}) - ${paymentText}, $${pricePerUnit.toFixed(2)}/unit`;
@@ -1151,33 +1147,26 @@ class TradeFinanceGame {
             return;
         }
 
-        // Calculate revenue with product-specific margin and credit term adjustments
-        const priceVariation = 0.9 + Math.random() * 0.2; // 90% to 110% of base price
-        const baseSalePrice = productData.price * priceVariation;
+        // Use manufacturing price as base (price from manufacturing tab)
+        let baseSalePrice = productData.price; // Exact manufacturing price for 30-day terms
         
-        // Calculate margin based on product and credit terms
-        let marginPerUnit = productData.baseMargin;
-        
-        // Credit term adjustments: longer terms = premium, shorter terms = discount
+        // Credit term adjustments based on payment terms
+        // 30 days = standard price, shorter terms = discount, longer terms = premium
         if (buyerData.paymentTerms === 0) {
-            marginPerUnit = 0; // No margin for cash terms - price below base
+            baseSalePrice *= 0.80; // 20% discount for cash payment (zero risk)
         } else if (buyerData.paymentTerms <= 15) {
-            marginPerUnit *= 0.8; // 20% discount for very short terms
+            baseSalePrice *= 0.90; // 10% discount for very short terms
         } else if (buyerData.paymentTerms <= 30) {
-            marginPerUnit *= 0.9; // 10% discount for short terms
+            baseSalePrice *= 1.0; // Standard price for 30-day terms (exact manufacturing price)
         } else if (buyerData.paymentTerms <= 45) {
-            marginPerUnit *= 1.0; // Base margin for standard terms
+            baseSalePrice *= 1.05; // 5% premium for longer terms
         } else if (buyerData.paymentTerms <= 60) {
-            marginPerUnit *= 1.1; // 10% premium for longer terms
+            baseSalePrice *= 1.10; // 10% premium for extended terms
+        } else {
+            baseSalePrice *= 1.15; // 15% premium for very long terms
         }
         
-        const marginPrice = baseSalePrice + marginPerUnit;
-        let revenue = quantity * marginPrice;
-        
-        // For cash terms, apply additional discount to make price below base
-        if (buyerData.paymentTerms === 0) {
-            revenue = quantity * (baseSalePrice * 0.8); // 20% discount from base price
-        }
+        let revenue = quantity * baseSalePrice;
 
         // Apply financing effects
         let finalRevenue = revenue;
@@ -1197,8 +1186,7 @@ class TradeFinanceGame {
             buyer,
             quantity,
             basePrice: baseSalePrice,
-            marginPerUnit: marginPerUnit,
-            marginPrice: marginPrice,
+            unitPrice: baseSalePrice,
             revenue: finalRevenue,
             originalRevenue: revenue, // Store original revenue before factoring
             financingMethod,
